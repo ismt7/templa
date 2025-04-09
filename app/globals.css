@@ -1,0 +1,141 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --primary: #3b82f6; /* プライマリカラー */
+  --secondary: #64748b; /* セカンダリカラー */
+  --accent: #facc15; /* アクセントカラー */
+  --border: #e5e7eb; /* ボーダーカラー */
+  --hover: #f3f4f6; /* ホバー時の背景色 */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --primary: #2563eb;
+    --secondary: #94a3b8;
+    --accent: #eab308;
+    --border: #374151;
+    --hover: #1f2937;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* 見出し */
+.heading-1 {
+  @apply text-3xl font-bold text-gray-800 mb-6;
+}
+
+.heading-2 {
+  @apply text-xl font-semibold text-gray-800 mb-4;
+}
+
+/* アクションボタン */
+.button-action {
+  @apply px-2 py-1 rounded-md flex items-center shadow-md transition;
+}
+
+.button-action:hover,
+.button-action-add:hover,
+.button:hover {
+  @apply scale-105;
+}
+
+.button-action-remove {
+  @apply bg-red-400 text-white hover:bg-red-600;
+}
+
+.button-action-copy {
+  @apply bg-blue-400 text-white hover:bg-blue-600;
+}
+
+.button-action-add {
+  @apply px-4 py-2 bg-green-400 text-white rounded-lg hover:bg-green-600 flex items-center shadow-md transition;
+}
+
+.button-import,
+.button-export {
+  @apply bg-white rounded-lg shadow-md;
+}
+
+/* ボタン */
+.button {
+  @apply px-4 py-2;
+}
+
+.button-icon {
+  @apply w-4 h-4 mr-2;
+}
+
+/* 入力フォーム */
+.input-text {
+  @apply w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm;
+}
+
+/* 未整理 */
+
+.button-primary {
+  @apply bg-blue-500 text-white hover:bg-blue-600;
+}
+
+.button-secondary {
+  @apply bg-gray-300 text-gray-700 hover:bg-gray-400;
+}
+
+.button-danger {
+  @apply bg-red-500 text-white hover:bg-red-600;
+}
+
+.button-success {
+  @apply bg-green-500 text-white hover:bg-green-600;
+}
+
+/* カードのスタイル */
+.card {
+  @apply p-4 rounded-lg shadow-md border;
+  background-color: var(--background);
+  border-color: var(--border);
+}
+
+.card:hover {
+  background-color: var(--hover);
+}
+
+/* ヘッダーのスタイル */
+.header {
+  @apply text-lg font-semibold;
+  color: var(--foreground);
+}
+
+/* テキストのスタイル */
+.text-primary {
+  color: var(--primary);
+}
+
+.text-secondary {
+  color: var(--secondary);
+}
+
+.text-accent {
+  color: var(--accent);
+}
+
+/* 入力フォームとテキストエリアの背景色を白に設定 */
+input,
+textarea {
+  @apply bg-white;
+}
