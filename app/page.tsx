@@ -4,10 +4,7 @@ import { useState, useEffect } from "react";
 import {
   ClipboardDocumentIcon,
   PlusIcon,
-  PencilIcon,
   TrashIcon,
-  ArrowDownTrayIcon,
-  ArrowUpTrayIcon,
   CogIcon,
 } from "@heroicons/react/24/outline";
 import {
@@ -207,8 +204,9 @@ export default function TemplateEditorPage() {
   const closeEditTemplateModal = () => {
     setCurrentPlaceholder(null);
     setShowEditTemplateModal(false);
-    document.activeElement instanceof HTMLElement &&
+    if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
+    }
   };
 
   const addTemplate = () => {
@@ -257,14 +255,6 @@ export default function TemplateEditorPage() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
-
-  // モーダル内に入力内容をクリアするボタンを追加
-  const clearModalInput = () => {
-    if (currentPlaceholder) {
-      handlePlaceholderChange(currentPlaceholder, "");
-      evaluatePlaceholdersWrapper();
-    }
-  };
 
   return (
     <div className="flex h-screen">
