@@ -1,0 +1,9 @@
+{
+    "git.branchProtection": [
+        "main"
+    ],
+    "git.branchPrefix": "feature-",
+    "git.branchRandomName.enable": true,
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+}
