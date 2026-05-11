@@ -58,6 +58,40 @@ npm run dev
 
 ブラウザで `http://localhost:3000` を開いて確認します。
 
+### Docker で利用する（GHCR）
+
+GitHub Container Registry (GHCR) からイメージを取得して、ローカルで起動できます。
+
+### docker run コマンド
+
+```bash
+docker run -d --rm --name templa -p 3000:3000 ghcr.io/ismt7/templa:latest
+```
+
+### Docker Compose 記載例
+
+```yaml
+services:
+  app:
+    image: ghcr.io/ismt7/templa:latest
+    container_name: templa
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+```
+
+Compose で起動:
+
+```bash
+docker compose up -d
+```
+
+Compose で停止:
+
+```bash
+docker compose down
+```
+
 ### ビルド・起動
 
 ```bash
