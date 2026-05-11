@@ -1,3 +1,19 @@
+# 開発ステージ
+FROM node:22-alpine AS dev
+
+WORKDIR /app
+
+# 依存関係をインストール
+COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
+RUN npm ci
+
+# ソースコードをコピー
+COPY . .
+
+# 開発サーバー起動
+EXPOSE 3000
+CMD ["npm", "run", "dev"]
+
 # ビルドステージ
 FROM node:22-alpine AS builder
 

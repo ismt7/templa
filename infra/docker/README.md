@@ -25,7 +25,7 @@ docker-compose up -d --build
 
 ```bash
 # 開発イメージをビルド
-docker build -f infra/docker/Dockerfile.dev -t templa:dev .
+docker build -f infra/docker/Dockerfile --target dev -t templa:dev .
 
 # コンテナを実行
 docker run -it --rm -p 3000:3000 -v $(pwd):/app -v /app/node_modules templa:dev
@@ -109,4 +109,4 @@ docker-compose build --no-cache
 
 - macOS/Windows: Docker Desktop の リソース設定を確認（CPU/メモリ割り当て）
 - ボリュームマウント時は`.dockerignore` と `docker-compose.yml` の設定を確認
-- 開発中は `Dockerfile.dev` を使用（npm moduleキャッシュを活用）
+- 開発中は `Dockerfile` の dev ステージを使用
