@@ -47,6 +47,12 @@ docker build -f infra/docker/Dockerfile -t templa:latest .
 docker run -it --rm -p 3000:3000 templa:latest
 ```
 
+Apple Silicon (arm64) で `no matching manifest for linux/arm64/v8` が出る場合は、互換実行として `--platform` を指定します。
+
+```bash
+docker run -it --rm --platform linux/amd64 -p 3000:3000 templa:latest
+```
+
 ## よく使うコマンド
 
 ```bash
