@@ -6,14 +6,17 @@ WORKDIR /app
 # パッケージファイルをコピー
 COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
 
-# 依存関係をインストール
-RUN npm ci --only=production && npm cache clean --force
+# 依存関係をインストール（ビルドに必要なdevDependenciesを含む）
+RUN npm ci
 
 # ソースコードをコピー
 COPY . .
 
 # アプリケーションをビルド
 RUN npm run build
+
+# 実行に不要なdevDependenciesを削除
+RUN npm prune --omit=dev && npm cache clean --force
 
 # 本番ステージ
 FROM node:22-alpine
