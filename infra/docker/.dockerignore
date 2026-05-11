@@ -1,0 +1,61 @@
+# Node modules
+node_modules
+npm-debug.log
+npm-error.log
+pnpm-debug.log
+yarn-error.log
+
+# Next.js
+.next
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDEs
+.vscode
+.idea
+.DS_Store
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Documentation
+README.md
+docs
+
+# Build artifacts
+dist
+build
+coverage
+
+# Testing
+__tests__
+.jest
+cypress
+e2e
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Development
+docker-compose.yml
+.env
+.env.local
+
+# Other
+*.md
+LICENSE
+.editorconfig
