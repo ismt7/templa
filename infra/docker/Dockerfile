@@ -38,6 +38,7 @@ RUN npm prune --omit=dev && npm cache clean --force
 FROM node:22-alpine
 
 WORKDIR /app
+ENV NODE_ENV=production
 
 # セキュリティ: 非rootユーザーを作成
 RUN addgroup -g 1001 -S appgroup && \

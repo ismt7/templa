@@ -1,11 +1,19 @@
 import { NextConfig } from "next";
 
-const isProd = process.env.NODE_ENV === "production";
-
 const nextConfig: NextConfig = {
-  basePath: isProd ? "/templa" : "",
-  output: "export",
   images: { unoptimized: true },
+  async rewrites() {
+    return [
+      {
+        source: "/templa",
+        destination: "/",
+      },
+      {
+        source: "/templa/:path*",
+        destination: "/:path*",
+      },
+    ];
+  },
 };
 
 export default nextConfig;
