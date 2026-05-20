@@ -24,6 +24,8 @@ export interface Template {
   name: string;
   contents: string[];
   scenes: TemplateScene[];
+  manualPlaceholders: string[];
+  placeholderSettings: PlaceholderSettings;
 }
 
 const DEFAULT_SCENE_NAME = "デフォルト";
@@ -32,6 +34,8 @@ export const createTemplate = (name = "デフォルト"): Template => ({
   name,
   contents: [""],
   scenes: [{ name: DEFAULT_SCENE_NAME, values: {} }],
+  manualPlaceholders: [],
+  placeholderSettings: {},
 });
 
 const DATE_INPUT_VALUE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;

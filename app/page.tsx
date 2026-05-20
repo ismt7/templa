@@ -10,11 +10,12 @@ import {
 } from "@heroicons/react/24/outline";
 import {
   getStoredTemplates,
+  normalizeTemplates,
   saveTemplatesToStorage,
 } from "@/utils/localStorageUtils";
 import {
-  ensurePlaceholderSettings,
-  extractPlaceholders,
+  evaluatePlaceholders,
+  normalizePlaceholderName,
 } from "@/utils/placeholderUtils";
 import {
   createTemplate,
@@ -22,7 +23,6 @@ import {
   PlaceholderDateFormat,
   PlaceholderInputType,
   PlaceholderSetting,
-  PlaceholderSettings,
   PlaceholderValues,
   Template,
   replacePlaceholders,
@@ -123,6 +123,7 @@ const getTextareaPlaceholderLabel = (index: number): string =>
   `テキストエリア ${index + 1}`;
 
 const DATE_INPUT_VALUE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const NO_INSERTION_TARGET = "none";
 
 const createPlaceholderSetting = (
   type: PlaceholderInputType,
@@ -157,6 +158,19 @@ const getInputValueForPlaceholder = (
   return value && DATE_INPUT_VALUE_PATTERN.test(value) ? value : "";
 };
 
+const appendPlaceholderToken = (
+  content: string,
+  placeholder: string
+): string => {
+  const token = `{${placeholder}}`;
+
+  if (!content) {
+    return token;
+  }
+
+  return /[\s\n]$/.test(content) ? `${content}${token}` : `${content} ${token}`;
+};
+
 export default function TemplateEditorPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [hasLoadedTemplates, setHasLoadedTemplates] = useState<boolean>(false);
@@ -164,8 +178,6 @@ export default function TemplateEditorPage() {
     getTemplateIndexFromLocation
   );
   const [activeSceneIndex, setActiveSceneIndex] = useState<number>(0);
-  const [placeholderSettings, setPlaceholderSettings] =
-    useState<PlaceholderSettings>({});
   const [copyFeedback, setCopyFeedback] = useState<{
     index: number;
     status: "success" | "error";
@@ -174,6 +186,12 @@ export default function TemplateEditorPage() {
   const [showEditTemplateModal, setShowEditTemplateModal] =
     useState<boolean>(false);
   const [currentPlaceholder, setCurrentPlaceholder] = useState<string | null>(
+    null
+  );
+  const [newPlaceholderName, setNewPlaceholderName] = useState<string>("");
+  const [newPlaceholderInsertTarget, setNewPlaceholderInsertTarget] =
+    useState<string>(NO_INSERTION_TARGET);
+  const [newPlaceholderError, setNewPlaceholderError] = useState<string | null>(
     null
   );
   const copyFeedbackTimeoutRef = useRef<number | null>(null);
@@ -188,9 +206,30 @@ export default function TemplateEditorPage() {
     activeTemplate.scenes[activeSceneIndex]?.values ?? {};
   const hasTemplates = templates.length > 0;
 
-  const placeholders = useMemo(
-    () => extractPlaceholders(activeTemplate.contents),
-    [activeTemplate.contents]
+  const {
+    extractedPlaceholders,
+    placeholders,
+    updatedSettings: placeholderSettings,
+  } = useMemo(
+    () =>
+      evaluatePlaceholders(
+        activeTemplate.contents,
+        activeTemplate.manualPlaceholders,
+        activeTemplate.placeholderSettings
+      ),
+    [
+      activeTemplate.contents,
+      activeTemplate.manualPlaceholders,
+      activeTemplate.placeholderSettings,
+    ]
+  );
+  const extractedPlaceholderSet = useMemo(
+    () => new Set(extractedPlaceholders),
+    [extractedPlaceholders]
+  );
+  const manualPlaceholderSet = useMemo(
+    () => new Set(activeTemplate.manualPlaceholders),
+    [activeTemplate.manualPlaceholders]
   );
 
   useEffect(() => {
@@ -215,12 +254,6 @@ export default function TemplateEditorPage() {
 
     saveTemplatesToStorage(templates);
   }, [hasLoadedTemplates, templates]);
-
-  useEffect(() => {
-    setPlaceholderSettings((currentSettings) =>
-      ensurePlaceholderSettings(placeholders, currentSettings)
-    );
-  }, [placeholders]);
 
   useEffect(() => {
     return () => {
@@ -320,28 +353,62 @@ export default function TemplateEditorPage() {
     };
   }, [applyTemplateSelection, hasLoadedTemplates, templates.length]);
 
-  const updateActiveTemplate = (
-    updater: (template: Template) => Template
-  ): void => {
-    setTemplates((currentTemplates) =>
-      currentTemplates.map((template, index) =>
-        index === activeTemplateIndex ? updater(template) : template
-      )
-    );
-  };
+  const updateActiveTemplate = useCallback(
+    (updater: (template: Template) => Template): void => {
+      setTemplates((currentTemplates) =>
+        currentTemplates.map((template, index) =>
+          index === activeTemplateIndex ? updater(template) : template
+        )
+      );
+    },
+    [activeTemplateIndex]
+  );
 
-  const updateActiveSceneValues = (
-    updater: (values: PlaceholderValues) => PlaceholderValues
-  ): void => {
+  const updateActiveSceneValues = useCallback(
+    (updater: (values: PlaceholderValues) => PlaceholderValues): void => {
+      updateActiveTemplate((template) => ({
+        ...template,
+        scenes: template.scenes.map((scene, index) =>
+          index === activeSceneIndex
+            ? { ...scene, values: updater(scene.values) }
+            : scene
+        ),
+      }));
+    },
+    [activeSceneIndex, updateActiveTemplate]
+  );
+
+  useEffect(() => {
+    if (!hasTemplates || placeholderSettings === activeTemplate.placeholderSettings) {
+      return;
+    }
+
     updateActiveTemplate((template) => ({
       ...template,
-      scenes: template.scenes.map((scene, index) =>
-        index === activeSceneIndex
-          ? { ...scene, values: updater(scene.values) }
-          : scene
-      ),
+      placeholderSettings,
     }));
-  };
+  }, [
+    activeTemplate.placeholderSettings,
+    hasTemplates,
+    placeholderSettings,
+    updateActiveTemplate,
+  ]);
+
+  useEffect(() => {
+    if (newPlaceholderInsertTarget === NO_INSERTION_TARGET) {
+      return;
+    }
+
+    const targetIndex = Number.parseInt(newPlaceholderInsertTarget, 10);
+
+    if (
+      Number.isNaN(targetIndex) ||
+      targetIndex < 0 ||
+      targetIndex >= activeTemplate.contents.length
+    ) {
+      setNewPlaceholderInsertTarget(NO_INSERTION_TARGET);
+    }
+  }, [activeTemplate.contents.length, newPlaceholderInsertTarget]);
 
   const handleTemplateChange = (
     index: number,
@@ -412,9 +479,12 @@ export default function TemplateEditorPage() {
     key: string,
     type: PlaceholderInputType
   ) => {
-    setPlaceholderSettings((prev) => ({
-      ...prev,
-      [key]: createPlaceholderSetting(type, prev[key]),
+    updateActiveTemplate((template) => ({
+      ...template,
+      placeholderSettings: {
+        ...template.placeholderSettings,
+        [key]: createPlaceholderSetting(type, template.placeholderSettings[key]),
+      },
     }));
   };
 
@@ -422,11 +492,14 @@ export default function TemplateEditorPage() {
     key: string,
     dateFormat: PlaceholderDateFormat
   ) => {
-    setPlaceholderSettings((prev) => ({
-      ...prev,
-      [key]: {
-        ...createPlaceholderSetting("date", prev[key]),
-        dateFormat,
+    updateActiveTemplate((template) => ({
+      ...template,
+      placeholderSettings: {
+        ...template.placeholderSettings,
+        [key]: {
+          ...createPlaceholderSetting("date", template.placeholderSettings[key]),
+          dateFormat,
+        },
       },
     }));
   };
@@ -435,21 +508,29 @@ export default function TemplateEditorPage() {
     key: string,
     option: string
   ) => {
-    setPlaceholderSettings((prev) => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        options: [...(prev[key].options || []), option],
+    updateActiveTemplate((template) => ({
+      ...template,
+      placeholderSettings: {
+        ...template.placeholderSettings,
+        [key]: {
+          ...template.placeholderSettings[key],
+          options: [...(template.placeholderSettings[key]?.options || []), option],
+        },
       },
     }));
   };
 
   const handleRemoveListOption = (key: string, index: number) => {
-    setPlaceholderSettings((prev) => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        options: prev[key].options?.filter((_, i) => i !== index),
+    updateActiveTemplate((template) => ({
+      ...template,
+      placeholderSettings: {
+        ...template.placeholderSettings,
+        [key]: {
+          ...template.placeholderSettings[key],
+          options: template.placeholderSettings[key]?.options?.filter(
+            (_, optionIndex) => optionIndex !== index
+          ),
+        },
       },
     }));
   };
@@ -471,13 +552,80 @@ export default function TemplateEditorPage() {
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const importedTemplates = JSON.parse(event.target?.result as string);
+      const importedTemplates = normalizeTemplates(
+        JSON.parse(event.target?.result as string)
+      );
       setTemplates(importedTemplates);
       applyTemplateSelection(0, importedTemplates.length, {
         forceResetScene: true,
       });
     };
     reader.readAsText(file);
+  };
+
+  const handleCreatePlaceholder = () => {
+    const normalizedPlaceholderName = normalizePlaceholderName(newPlaceholderName);
+
+    if (!normalizedPlaceholderName) {
+      setNewPlaceholderError("プレースホルダー名を入力してください。");
+      return;
+    }
+
+    if (placeholders.includes(normalizedPlaceholderName)) {
+      setNewPlaceholderError("同名のプレースホルダーは既に存在します。");
+      return;
+    }
+
+    const insertionTargetIndex =
+      newPlaceholderInsertTarget === NO_INSERTION_TARGET
+        ? null
+        : Number.parseInt(newPlaceholderInsertTarget, 10);
+
+    updateActiveTemplate((template) => ({
+      ...template,
+      manualPlaceholders: [
+        ...template.manualPlaceholders,
+        normalizedPlaceholderName,
+      ],
+      placeholderSettings: {
+        ...template.placeholderSettings,
+        [normalizedPlaceholderName]:
+          template.placeholderSettings[normalizedPlaceholderName] ??
+          createPlaceholderSetting("text"),
+      },
+      contents:
+        insertionTargetIndex === null
+          ? template.contents
+          : template.contents.map((content, index) =>
+              index === insertionTargetIndex
+                ? appendPlaceholderToken(content, normalizedPlaceholderName)
+                : content
+            ),
+    }));
+    setNewPlaceholderName("");
+    setNewPlaceholderInsertTarget(NO_INSERTION_TARGET);
+    setNewPlaceholderError(null);
+  };
+
+  const handleRemoveManualPlaceholder = (placeholder: string) => {
+    updateActiveTemplate((template) => {
+      const nextPlaceholderSettings = { ...template.placeholderSettings };
+      delete nextPlaceholderSettings[placeholder];
+
+      return {
+        ...template,
+        manualPlaceholders: template.manualPlaceholders.filter(
+          (item) => item !== placeholder
+        ),
+        placeholderSettings: nextPlaceholderSettings,
+        scenes: template.scenes.map((scene) => {
+          const nextValues = { ...scene.values };
+          delete nextValues[placeholder];
+
+          return { ...scene, values: nextValues };
+        }),
+      };
+    });
   };
 
   const openModal = (placeholder: string) => {
@@ -628,6 +776,55 @@ export default function TemplateEditorPage() {
 
             <div className="mt-8">
               <h2 className="heading-2">プレースホルダの値を入力</h2>
+              <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+                  <div className="flex-1">
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      プレースホルダー名
+                    </label>
+                    <input
+                      type="text"
+                      className="input-text"
+                      placeholder="例: 顧客名 / {顧客名}"
+                      value={newPlaceholderName}
+                      onChange={(e) => {
+                        setNewPlaceholderName(e.target.value);
+                        setNewPlaceholderError(null);
+                      }}
+                    />
+                  </div>
+                  <div className="w-full lg:w-72">
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      本文へ挿入
+                    </label>
+                    <select
+                      className="w-full rounded-lg border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={newPlaceholderInsertTarget}
+                      onChange={(e) => setNewPlaceholderInsertTarget(e.target.value)}
+                    >
+                      <option value={NO_INSERTION_TARGET}>挿入しない</option>
+                      {activeTemplate.contents.map((_, index) => (
+                        <option key={index} value={String(index)}>
+                          {getTextareaPlaceholderLabel(index)} に挿入
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    className="button-action-add whitespace-nowrap"
+                    onClick={handleCreatePlaceholder}
+                  >
+                    <PlusIcon className="mr-2 h-5 w-5" />
+                    プレースホルダー追加
+                  </button>
+                </div>
+                {newPlaceholderError && (
+                  <p className="mt-3 text-sm text-red-600">{newPlaceholderError}</p>
+                )}
+                <p className="mt-3 text-sm text-gray-500">
+                  本文にまだ書いていないプレースホルダーも先に作成して設定できます。
+                </p>
+              </div>
               {placeholders.length > 0 ? (
                 <table className="w-full border-collapse border border-gray-300 bg-white shadow-md rounded-lg">
                   <thead>
@@ -641,13 +838,28 @@ export default function TemplateEditorPage() {
                       <th className="border border-gray-300 px-4 py-2 bg-gray-100 text-center text-gray-700">
                         設定
                       </th>
+                      <th className="border border-gray-300 px-4 py-2 bg-gray-100 text-center text-gray-700">
+                        操作
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {placeholders.map((placeholder, index) => (
                       <tr key={index}>
                         <td className="border border-gray-300 px-4 py-2 text-gray-800">
-                          {placeholder}
+                          <div className="flex items-center gap-2">
+                            <span>{placeholder}</span>
+                            {manualPlaceholderSet.has(placeholder) && (
+                              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
+                                手動
+                              </span>
+                            )}
+                            {extractedPlaceholderSet.has(placeholder) && (
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                                本文内
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="border border-gray-300 px-4 py-2">
                           {placeholderSettings[placeholder]?.type === "list" ? (
@@ -698,6 +910,20 @@ export default function TemplateEditorPage() {
                           >
                             <CogIcon className="w-5 h-5" />
                           </button>
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2 text-center">
+                          {manualPlaceholderSet.has(placeholder) &&
+                          !extractedPlaceholderSet.has(placeholder) ? (
+                            <button
+                              className="px-2 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 flex items-center justify-center"
+                              onClick={() => handleRemoveManualPlaceholder(placeholder)}
+                              aria-label={`${placeholder} を削除`}
+                            >
+                              <TrashIcon className="w-5 h-5" />
+                            </button>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
                         </td>
                       </tr>
                     ))}

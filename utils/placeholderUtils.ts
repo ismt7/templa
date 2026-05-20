@@ -7,6 +7,22 @@ export const extractPlaceholders = (contents: string[]): string[] => {
   return Array.from(new Set(matches.map((match) => match.slice(1, -1))));
 };
 
+export const normalizePlaceholderName = (name: string): string => {
+  const trimmedName = name.trim();
+
+  if (trimmedName.startsWith("{") && trimmedName.endsWith("}")) {
+    return trimmedName.slice(1, -1).trim();
+  }
+
+  return trimmedName;
+};
+
+export const mergePlaceholders = (
+  manualPlaceholders: string[],
+  extractedPlaceholders: string[]
+): string[] =>
+  Array.from(new Set([...manualPlaceholders, ...extractedPlaceholders]));
+
 export const ensurePlaceholderSettings = (
   placeholders: string[],
   placeholderSettings: PlaceholderSettings
@@ -26,13 +42,22 @@ export const ensurePlaceholderSettings = (
 
 export const evaluatePlaceholders = (
   contents: string[],
+  manualPlaceholders: string[],
   placeholderSettings: PlaceholderSettings
-): { placeholders: string[]; updatedSettings: PlaceholderSettings } => {
-  const placeholders = extractPlaceholders(contents);
+): {
+  extractedPlaceholders: string[];
+  placeholders: string[];
+  updatedSettings: PlaceholderSettings;
+} => {
+  const extractedPlaceholders = extractPlaceholders(contents);
+  const placeholders = mergePlaceholders(
+    manualPlaceholders,
+    extractedPlaceholders
+  );
   const updatedSettings = ensurePlaceholderSettings(
     placeholders,
     placeholderSettings
   );
 
-  return { placeholders, updatedSettings };
+  return { extractedPlaceholders, placeholders, updatedSettings };
 };
