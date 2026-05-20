@@ -11,7 +11,7 @@ import { Template } from "@/utils/templateUtils";
 interface SideMenuProps {
   templates: Template[];
   activeTemplateIndex: number;
-  setActiveTemplateIndex: (index: number) => void;
+  onSelectTemplate: (index: number) => void;
   handleExport: () => void;
   handleImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
   addTemplate: () => void;
@@ -21,7 +21,7 @@ interface SideMenuProps {
 const SideMenu: React.FC<SideMenuProps> = ({
   templates,
   activeTemplateIndex,
-  setActiveTemplateIndex,
+  onSelectTemplate,
   handleExport,
   handleImport,
   addTemplate,
@@ -38,7 +38,7 @@ const SideMenu: React.FC<SideMenuProps> = ({
               className={`card cursor-pointer transition relative ${
                 activeTemplateIndex === index ? "bg-gray-200" : ""
               }`}
-              onClick={() => setActiveTemplateIndex(index)}
+              onClick={() => onSelectTemplate(index)}
             >
               <h3 className="text-base font-medium text-gray-700">
                 {template.name}

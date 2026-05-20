@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ClipboardDocumentIcon,
   PencilSquareIcon,
@@ -73,6 +73,17 @@ const replaceTemplateIndexInUrl = (templateIndex: number | null): void => {
   }
 
   window.history.replaceState(window.history.state, "", nextRelativeUrl);
+};
+
+const normalizeTemplateIndex = (
+  templateIndex: number,
+  templateCount: number
+): number => {
+  if (templateCount <= 0) {
+    return 0;
+  }
+
+  return Math.min(Math.max(templateIndex, 0), templateCount - 1);
 };
 
 const copyTextToClipboard = async (text: string): Promise<void> => {
@@ -183,8 +194,17 @@ export default function TemplateEditorPage() {
   );
 
   useEffect(() => {
-    setTemplates(getStoredTemplates());
-    setActiveTemplateIndex(getTemplateIndexFromLocation());
+    const storedTemplates = getStoredTemplates();
+    const nextTemplateIndex = normalizeTemplateIndex(
+      getTemplateIndexFromLocation(),
+      storedTemplates.length
+    );
+
+    setTemplates(storedTemplates);
+    setActiveTemplateIndex(nextTemplateIndex);
+    replaceTemplateIndexInUrl(
+      storedTemplates.length === 0 ? null : nextTemplateIndex
+    );
     setHasLoadedTemplates(true);
   }, []);
 
@@ -203,59 +223,102 @@ export default function TemplateEditorPage() {
   }, [placeholders]);
 
   useEffect(() => {
-    if (!hasLoadedTemplates) {
-      return;
-    }
-
-    const requestedTemplateIndex = getTemplateIndexFromLocation();
-    const nextTemplateIndex =
-      templates.length === 0
-        ? 0
-        : Math.min(requestedTemplateIndex, templates.length - 1);
-
-    if (nextTemplateIndex !== activeTemplateIndex) {
-      setActiveTemplateIndex(nextTemplateIndex);
-      setActiveSceneIndex(0);
-    }
-  }, [activeTemplateIndex, hasLoadedTemplates, templates.length]);
-
-  useEffect(() => {
-    if (!hasLoadedTemplates) {
-      return;
-    }
-
-    const normalizedTemplateIndex =
-      templates.length === 0
-        ? 0
-        : Math.min(activeTemplateIndex, templates.length - 1);
-    replaceTemplateIndexInUrl(
-      templates.length === 0 ? null : normalizedTemplateIndex
-    );
-  }, [activeTemplateIndex, hasLoadedTemplates, templates.length]);
-
-  useEffect(() => {
-    if (!hasLoadedTemplates || templates.length === 0) {
-      return;
-    }
-
-    const normalizedTemplateIndex = Math.min(
-      activeTemplateIndex,
-      templates.length - 1
-    );
-
-    if (normalizedTemplateIndex !== activeTemplateIndex) {
-      setActiveTemplateIndex(normalizedTemplateIndex);
-      setActiveSceneIndex(0);
-    }
-  }, [activeTemplateIndex, hasLoadedTemplates, templates.length]);
-
-  useEffect(() => {
     return () => {
       if (copyFeedbackTimeoutRef.current !== null) {
         window.clearTimeout(copyFeedbackTimeoutRef.current);
       }
     };
   }, []);
+
+  const applyTemplateSelection = useCallback(
+    (
+      index: number,
+      templateCount: number,
+      {
+        resetScene = true,
+        syncUrl = true,
+        forceResetScene = false,
+      }: {
+        resetScene?: boolean;
+        syncUrl?: boolean;
+        forceResetScene?: boolean;
+      } = {}
+    ): void => {
+      const nextTemplateIndex = normalizeTemplateIndex(index, templateCount);
+      const hasChanged = nextTemplateIndex !== activeTemplateIndex;
+
+      if (hasChanged) {
+        setActiveTemplateIndex(nextTemplateIndex);
+      }
+
+      if (resetScene && (hasChanged || forceResetScene)) {
+        setActiveSceneIndex(0);
+      }
+
+      if (syncUrl) {
+        replaceTemplateIndexInUrl(
+          templateCount === 0 ? null : nextTemplateIndex
+        );
+      }
+    },
+    [activeTemplateIndex]
+  );
+
+  const selectTemplate = useCallback(
+    (
+      index: number,
+      options?: {
+        resetScene?: boolean;
+        syncUrl?: boolean;
+      }
+    ): void => {
+      applyTemplateSelection(index, templates.length, options);
+    },
+    [applyTemplateSelection, templates.length]
+  );
+
+  useEffect(() => {
+    if (!hasLoadedTemplates) {
+      return;
+    }
+
+    if (templates.length === 0) {
+      replaceTemplateIndexInUrl(null);
+      return;
+    }
+
+    const normalizedTemplateIndex = normalizeTemplateIndex(
+      activeTemplateIndex,
+      templates.length
+    );
+
+    if (normalizedTemplateIndex !== activeTemplateIndex) {
+      applyTemplateSelection(normalizedTemplateIndex, templates.length);
+    }
+  }, [
+    activeTemplateIndex,
+    applyTemplateSelection,
+    hasLoadedTemplates,
+    templates.length,
+  ]);
+
+  useEffect(() => {
+    if (!hasLoadedTemplates) {
+      return;
+    }
+
+    const handlePopState = (): void => {
+      applyTemplateSelection(getTemplateIndexFromLocation(), templates.length, {
+        syncUrl: false,
+      });
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [applyTemplateSelection, hasLoadedTemplates, templates.length]);
 
   const updateActiveTemplate = (
     updater: (template: Template) => Template
@@ -410,8 +473,9 @@ export default function TemplateEditorPage() {
     reader.onload = (event) => {
       const importedTemplates = JSON.parse(event.target?.result as string);
       setTemplates(importedTemplates);
-      setActiveTemplateIndex(0);
-      setActiveSceneIndex(0);
+      applyTemplateSelection(0, importedTemplates.length, {
+        forceResetScene: true,
+      });
     };
     reader.readAsText(file);
   };
@@ -441,25 +505,29 @@ export default function TemplateEditorPage() {
 
   const addTemplate = () => {
     const newTemplate = createTemplate(`テンプレート${templates.length + 1}`);
-    setTemplates((currentTemplates) => [...currentTemplates, newTemplate]);
-    setActiveTemplateIndex(templates.length);
-    setActiveSceneIndex(0);
+    const updatedTemplates = [...templates, newTemplate];
+    setTemplates(updatedTemplates);
+    applyTemplateSelection(updatedTemplates.length - 1, updatedTemplates.length);
   };
 
   const handleDeleteTemplate = (index: number) => {
     const updatedTemplates = templates.filter((_, i) => i !== index);
     setTemplates(updatedTemplates);
+
+    const nextTemplateIndex =
+      activeTemplateIndex > index ? activeTemplateIndex - 1 : activeTemplateIndex;
+
     if (updatedTemplates.length === 0) {
+      applyTemplateSelection(0, 0);
       setCurrentPlaceholder(null);
       setShowModal(false);
       setShowEditTemplateModal(false);
+      return;
     }
-    if (activeTemplateIndex === index) {
-      setActiveTemplateIndex(0);
-      setActiveSceneIndex(0);
-    } else if (activeTemplateIndex > index) {
-      setActiveTemplateIndex(activeTemplateIndex - 1);
-    }
+
+    applyTemplateSelection(nextTemplateIndex, updatedTemplates.length, {
+      forceResetScene: activeTemplateIndex === index,
+    });
   };
 
   const handleEditTemplateClick = (index: number) => {
@@ -475,7 +543,7 @@ export default function TemplateEditorPage() {
       <SideMenu
         templates={templates}
         activeTemplateIndex={activeTemplateIndex}
-        setActiveTemplateIndex={setActiveTemplateIndex}
+        onSelectTemplate={selectTemplate}
         handleExport={handleExport}
         handleImport={handleImport}
         addTemplate={addTemplate}
