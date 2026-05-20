@@ -27,10 +27,56 @@ import SideMenu from "./components/SideMenu";
 import EditTemplateModal from "./components/EditTemplateModal";
 import PlaceholderSettingsModal from "./components/PlaceholderSettingsModal";
 
+const TEMPLATE_QUERY_PARAM = "template";
+
+const parseTemplateIndex = (value: string | null): number => {
+  if (value === null) {
+    return 0;
+  }
+
+  const parsedValue = Number.parseInt(value, 10);
+  return Number.isNaN(parsedValue) || parsedValue < 0 ? 0 : parsedValue;
+};
+
+const getTemplateIndexFromLocation = (): number => {
+  if (typeof window === "undefined") {
+    return 0;
+  }
+
+  return parseTemplateIndex(
+    new URLSearchParams(window.location.search).get(TEMPLATE_QUERY_PARAM)
+  );
+};
+
+const replaceTemplateIndexInUrl = (templateIndex: number | null): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const nextUrl = new URL(window.location.href);
+
+  if (templateIndex === null) {
+    nextUrl.searchParams.delete(TEMPLATE_QUERY_PARAM);
+  } else {
+    nextUrl.searchParams.set(TEMPLATE_QUERY_PARAM, String(templateIndex));
+  }
+
+  const currentUrl = `${window.location.pathname}${window.location.search}`;
+  const nextRelativeUrl = `${nextUrl.pathname}${nextUrl.search}`;
+
+  if (currentUrl === nextRelativeUrl) {
+    return;
+  }
+
+  window.history.replaceState(window.history.state, "", nextRelativeUrl);
+};
+
 export default function TemplateEditorPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [hasLoadedTemplates, setHasLoadedTemplates] = useState<boolean>(false);
-  const [activeTemplateIndex, setActiveTemplateIndex] = useState<number>(0);
+  const [activeTemplateIndex, setActiveTemplateIndex] = useState<number>(
+    getTemplateIndexFromLocation
+  );
   const [activeSceneIndex, setActiveSceneIndex] = useState<number>(0);
   const [placeholderSettings, setPlaceholderSettings] =
     useState<PlaceholderSettings>({});
@@ -59,6 +105,7 @@ export default function TemplateEditorPage() {
 
   useEffect(() => {
     setTemplates(getStoredTemplates());
+    setActiveTemplateIndex(getTemplateIndexFromLocation());
     setHasLoadedTemplates(true);
   }, []);
 
@@ -75,6 +122,53 @@ export default function TemplateEditorPage() {
       ensurePlaceholderSettings(placeholders, currentSettings)
     );
   }, [placeholders]);
+
+  useEffect(() => {
+    if (!hasLoadedTemplates) {
+      return;
+    }
+
+    const requestedTemplateIndex = getTemplateIndexFromLocation();
+    const nextTemplateIndex =
+      templates.length === 0
+        ? 0
+        : Math.min(requestedTemplateIndex, templates.length - 1);
+
+    if (nextTemplateIndex !== activeTemplateIndex) {
+      setActiveTemplateIndex(nextTemplateIndex);
+      setActiveSceneIndex(0);
+    }
+  }, [activeTemplateIndex, hasLoadedTemplates, templates.length]);
+
+  useEffect(() => {
+    if (!hasLoadedTemplates) {
+      return;
+    }
+
+    const normalizedTemplateIndex =
+      templates.length === 0
+        ? 0
+        : Math.min(activeTemplateIndex, templates.length - 1);
+    replaceTemplateIndexInUrl(
+      templates.length === 0 ? null : normalizedTemplateIndex
+    );
+  }, [activeTemplateIndex, hasLoadedTemplates, templates.length]);
+
+  useEffect(() => {
+    if (!hasLoadedTemplates || templates.length === 0) {
+      return;
+    }
+
+    const normalizedTemplateIndex = Math.min(
+      activeTemplateIndex,
+      templates.length - 1
+    );
+
+    if (normalizedTemplateIndex !== activeTemplateIndex) {
+      setActiveTemplateIndex(normalizedTemplateIndex);
+      setActiveSceneIndex(0);
+    }
+  }, [activeTemplateIndex, hasLoadedTemplates, templates.length]);
 
   const updateActiveTemplate = (
     updater: (template: Template) => Template
