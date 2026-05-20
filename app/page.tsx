@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ClipboardDocumentIcon,
+  PencilSquareIcon,
   PlusIcon,
   TrashIcon,
   CogIcon,
@@ -103,6 +104,9 @@ const copyTextToClipboard = async (text: string): Promise<void> => {
     document.body.removeChild(textarea);
   }
 };
+
+const getTextareaPlaceholderLabel = (index: number): string =>
+  `テキストエリア ${index + 1}`;
 
 export default function TemplateEditorPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -294,7 +298,7 @@ export default function TemplateEditorPage() {
     updateActiveTemplate((template) => ({
       ...template,
       contents: template.contents.map((content, index) =>
-        `テキストエリア ${index + 1}` === key ? value : content
+        getTextareaPlaceholderLabel(index) === key ? value : content
       ),
     }));
   };
@@ -403,8 +407,8 @@ export default function TemplateEditorPage() {
     }
   };
 
-  const handleTextareaFocus = (index: number) => {
-    const placeholder = `テキストエリア ${index + 1}`;
+  const handleEditTemplateClick = (index: number) => {
+    const placeholder = getTextareaPlaceholderLabel(index);
     setCurrentPlaceholder(placeholder);
     const value = activeTemplate.contents[index];
     handlePlaceholderChange(placeholder, value);
@@ -453,10 +457,16 @@ export default function TemplateEditorPage() {
                   className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
                   placeholder={`テキストエリア ${index + 1}`}
                   value={content}
-                  onFocus={() => handleTextareaFocus(index)}
                   onChange={(e) => handleTemplateChange(index, e)}
                 />
                 <div className="absolute top-2 right-2 flex space-x-2">
+                  <button
+                    className="button-action"
+                    onClick={() => handleEditTemplateClick(index)}
+                    aria-label={`テキストエリア ${index + 1} をモーダルで編集`}
+                  >
+                    <PencilSquareIcon className="w-5 h-5" />
+                  </button>
                   <button
                     className="button-action button-action-copy"
                     onClick={() => {
