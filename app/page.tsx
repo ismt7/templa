@@ -29,6 +29,7 @@ import PlaceholderSettingsModal from "./components/PlaceholderSettingsModal";
 
 export default function TemplateEditorPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [hasLoadedTemplates, setHasLoadedTemplates] = useState<boolean>(false);
   const [activeTemplateIndex, setActiveTemplateIndex] = useState<number>(0);
   const [activeSceneIndex, setActiveSceneIndex] = useState<number>(0);
   const [placeholderSettings, setPlaceholderSettings] =
@@ -49,6 +50,7 @@ export default function TemplateEditorPage() {
     } satisfies Template);
   const activeSceneValues =
     activeTemplate.scenes[activeSceneIndex]?.values ?? {};
+  const hasTemplates = templates.length > 0;
 
   const placeholders = useMemo(
     () => extractPlaceholders(activeTemplate.contents),
@@ -57,11 +59,16 @@ export default function TemplateEditorPage() {
 
   useEffect(() => {
     setTemplates(getStoredTemplates());
+    setHasLoadedTemplates(true);
   }, []);
 
   useEffect(() => {
+    if (!hasLoadedTemplates) {
+      return;
+    }
+
     saveTemplatesToStorage(templates);
-  }, [templates]);
+  }, [hasLoadedTemplates, templates]);
 
   useEffect(() => {
     setPlaceholderSettings((currentSettings) =>
@@ -231,6 +238,11 @@ export default function TemplateEditorPage() {
   const handleDeleteTemplate = (index: number) => {
     const updatedTemplates = templates.filter((_, i) => i !== index);
     setTemplates(updatedTemplates);
+    if (updatedTemplates.length === 0) {
+      setCurrentPlaceholder(null);
+      setShowModal(false);
+      setShowEditTemplateModal(false);
+    }
     if (activeTemplateIndex === index) {
       setActiveTemplateIndex(0);
       setActiveSceneIndex(0);
@@ -261,134 +273,160 @@ export default function TemplateEditorPage() {
 
       {/* メインコンテンツ */}
       <div className="flex-1 p-8 overflow-y-auto">
-        <h1 className="heading-1">テンプレート編集</h1>
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            テンプレート名
-          </label>
-          <div className="flex items-center space-x-2">
-            <input
-              type="text"
-              className="input-text"
-              value={activeTemplate.name}
-              onChange={(e) =>
-                updateActiveTemplate((template) => ({
-                  ...template,
-                  name: e.target.value,
-                }))
-              }
-            />
-          </div>
-        </div>
+        {hasTemplates ? (
+          <>
+            <h1 className="heading-1">テンプレート編集</h1>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                テンプレート名
+              </label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  className="input-text"
+                  value={activeTemplate.name}
+                  onChange={(e) =>
+                    updateActiveTemplate((template) => ({
+                      ...template,
+                      name: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
 
-        {activeTemplate.contents.map((content, index) => (
-          <div key={index} className="mb-2 relative">
-            <textarea
-              className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
-              placeholder={`テキストエリア ${index + 1}`}
-              value={content}
-              onFocus={() => handleTextareaFocus(index)}
-              onChange={(e) => handleTemplateChange(index, e)}
-            />
-            <div className="absolute top-2 right-2 flex space-x-2">
-              <button
-                className="button-action button-action-copy"
-                onClick={() => handleCopy(index)}
-              >
-                <ClipboardDocumentIcon className="w-5 h-5" />
-              </button>
-              <button
-                className="button-action button-action-remove"
-                onClick={() => handleRemoveTextarea(index)}
-              >
-                <TrashIcon className="w-5 h-5" />
+            {activeTemplate.contents.map((content, index) => (
+              <div key={index} className="mb-2 relative">
+                <textarea
+                  className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+                  placeholder={`テキストエリア ${index + 1}`}
+                  value={content}
+                  onFocus={() => handleTextareaFocus(index)}
+                  onChange={(e) => handleTemplateChange(index, e)}
+                />
+                <div className="absolute top-2 right-2 flex space-x-2">
+                  <button
+                    className="button-action button-action-copy"
+                    onClick={() => handleCopy(index)}
+                  >
+                    <ClipboardDocumentIcon className="w-5 h-5" />
+                  </button>
+                  <button
+                    className="button-action button-action-remove"
+                    onClick={() => handleRemoveTextarea(index)}
+                  >
+                    <TrashIcon className="w-5 h-5" />
+                  </button>
+                </div>
+                {showTooltip === index && (
+                  <div className="absolute top-12 right-2 px-3 py-2 bg-gray-800 text-white text-sm rounded-lg shadow-lg">
+                    コピーしました！
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <button className="button-action-add" onClick={handleAddTextarea}>
+              <PlusIcon className="w-5 h-5 mr-2" />
+              テキストエリア追加
+            </button>
+
+            <div className="mt-8">
+              <h2 className="heading-2">プレースホルダの値を入力</h2>
+              {placeholders.length > 0 ? (
+                <table className="w-full border-collapse border border-gray-300 bg-white shadow-md rounded-lg">
+                  <thead>
+                    <tr>
+                      <th className="border border-gray-300 px-4 py-2 bg-gray-100 text-left text-gray-700">
+                        プレースホルダ
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 bg-gray-100 text-left text-gray-700">
+                        値
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 bg-gray-100 text-center text-gray-700">
+                        設定
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {placeholders.map((placeholder, index) => (
+                      <tr key={index}>
+                        <td className="border border-gray-300 px-4 py-2 text-gray-800">
+                          {placeholder}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {placeholderSettings[placeholder]?.type === "list" ? (
+                            <select
+                              className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              value={activeSceneValues[placeholder] || ""}
+                              onChange={(e) =>
+                                handlePlaceholderChange(
+                                  placeholder,
+                                  e.target.value
+                                )
+                              }
+                            >
+                              <option value="">選択してください</option>
+                              {placeholderSettings[placeholder]?.options?.map(
+                                (option, idx) => (
+                                  <option key={idx} value={option}>
+                                    {option}
+                                  </option>
+                                )
+                              )}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              value={activeSceneValues[placeholder] || ""}
+                              onChange={(e) =>
+                                handlePlaceholderChange(
+                                  placeholder,
+                                  e.target.value
+                                )
+                              }
+                            />
+                          )}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2 text-center">
+                          <button
+                            className="px-2 py-1 bg-gray-500 text-white rounded-md hover:bg-gray-600 flex items-center justify-center"
+                            onClick={() => openModal(placeholder)}
+                          >
+                            <CogIcon className="w-5 h-5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-gray-500 mt-4">
+                  プレースホルダはありません。
+                </p>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <div className="w-full max-w-xl rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center shadow-sm">
+              <h1 className="heading-1 mb-4">テンプレートがありません</h1>
+              <p className="text-gray-600">
+                左メニューの「テンプレート追加」から新規作成するか、
+                JSON をインポートしてください。
+              </p>
+              <button className="button-action-add mt-6 inline-flex" onClick={addTemplate}>
+                <PlusIcon className="w-5 h-5 mr-2" />
+                テンプレート追加
               </button>
             </div>
-            {showTooltip === index && (
-              <div className="absolute top-12 right-2 px-3 py-2 bg-gray-800 text-white text-sm rounded-lg shadow-lg">
-                コピーしました！
-              </div>
-            )}
           </div>
-        ))}
-
-        <button className="button-action-add" onClick={handleAddTextarea}>
-          <PlusIcon className="w-5 h-5 mr-2" />
-          テキストエリア追加
-        </button>
-
-        <div className="mt-8">
-          <h2 className="heading-2">プレースホルダの値を入力</h2>
-          {placeholders.length > 0 ? (
-            <table className="w-full border-collapse border border-gray-300 bg-white shadow-md rounded-lg">
-              <thead>
-                <tr>
-                  <th className="border border-gray-300 px-4 py-2 bg-gray-100 text-left text-gray-700">
-                    プレースホルダ
-                  </th>
-                  <th className="border border-gray-300 px-4 py-2 bg-gray-100 text-left text-gray-700">
-                    値
-                  </th>
-                  <th className="border border-gray-300 px-4 py-2 bg-gray-100 text-center text-gray-700">
-                    設定
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {placeholders.map((placeholder, index) => (
-                  <tr key={index}>
-                    <td className="border border-gray-300 px-4 py-2 text-gray-800">
-                      {placeholder}
-                    </td>
-                    <td className="border border-gray-300 px-4 py-2">
-                      {placeholderSettings[placeholder]?.type === "list" ? (
-                        <select
-                          className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          value={activeSceneValues[placeholder] || ""}
-                          onChange={(e) =>
-                            handlePlaceholderChange(placeholder, e.target.value)
-                          }
-                        >
-                          <option value="">選択してください</option>
-                          {placeholderSettings[placeholder]?.options?.map(
-                            (option, idx) => (
-                              <option key={idx} value={option}>
-                                {option}
-                              </option>
-                            )
-                          )}
-                        </select>
-                      ) : (
-                        <input
-                          type="text"
-                          className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          value={activeSceneValues[placeholder] || ""}
-                          onChange={(e) =>
-                            handlePlaceholderChange(placeholder, e.target.value)
-                          }
-                        />
-                      )}
-                    </td>
-                    <td className="border border-gray-300 px-4 py-2 text-center">
-                      <button
-                        className="px-2 py-1 bg-gray-500 text-white rounded-md hover:bg-gray-600 flex items-center justify-center"
-                        onClick={() => openModal(placeholder)}
-                      >
-                        <CogIcon className="w-5 h-5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="text-gray-500 mt-4">プレースホルダはありません。</p>
-          )}
-        </div>
+        )}
       </div>
 
       {/* モーダル */}
-      {showModal && currentPlaceholder && (
+      {hasTemplates && showModal && currentPlaceholder && (
         <PlaceholderSettingsModal
           key={currentPlaceholder}
           placeholder={currentPlaceholder}
@@ -405,7 +443,7 @@ export default function TemplateEditorPage() {
       )}
 
       {/* 編集用モーダル */}
-      {showEditTemplateModal && currentPlaceholder && (
+      {hasTemplates && showEditTemplateModal && currentPlaceholder && (
         <EditTemplateModal
           placeholder={currentPlaceholder}
           value={activeSceneValues[currentPlaceholder] || ""}

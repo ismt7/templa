@@ -30,30 +30,36 @@ const SideMenu: React.FC<SideMenuProps> = ({
   return (
     <div className="w-90 bg-gray-100 p-4 overflow-y-auto">
       <h2 className="header mb-6">テンプレート一覧</h2>
-      <div className="space-y-4">
-        {templates.map((template, index) => (
-          <div
-            key={index}
-            className={`card cursor-pointer transition relative ${
-              activeTemplateIndex === index ? "bg-gray-200" : ""
-            }`}
-            onClick={() => setActiveTemplateIndex(index)}
-          >
-            <h3 className="text-base font-medium text-gray-700">
-              {template.name}
-            </h3>
-            <button
-              className="absolute top-1/2 right-2 transform -translate-y-1/2 button-action button-action-remove"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDeleteTemplate(index);
-              }}
+      {templates.length > 0 ? (
+        <div className="space-y-4">
+          {templates.map((template, index) => (
+            <div
+              key={index}
+              className={`card cursor-pointer transition relative ${
+                activeTemplateIndex === index ? "bg-gray-200" : ""
+              }`}
+              onClick={() => setActiveTemplateIndex(index)}
             >
-              <TrashIcon className="w-4 h-4" />
-            </button>
-          </div>
-        ))}
-      </div>
+              <h3 className="text-base font-medium text-gray-700">
+                {template.name}
+              </h3>
+              <button
+                className="absolute top-1/2 right-2 transform -translate-y-1/2 button-action button-action-remove"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteTemplate(index);
+                }}
+              >
+                <TrashIcon className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-lg bg-white px-4 py-3 text-sm text-gray-500 shadow-sm">
+          テンプレートはまだありません。
+        </p>
+      )}
       <button className="button-action-add mt-4 w-full" onClick={addTemplate}>
         <PlusIcon className="button-icon" />
         テンプレート追加
