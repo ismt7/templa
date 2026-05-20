@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ClipboardDocumentIcon,
   PlusIcon,
@@ -10,33 +10,27 @@ import {
 import {
   getStoredTemplates,
   saveTemplatesToStorage,
-} from "../utils/localStorageUtils";
-import { evaluatePlaceholders } from "../utils/placeholderUtils";
+} from "@/utils/localStorageUtils";
+import {
+  ensurePlaceholderSettings,
+  extractPlaceholders,
+} from "@/utils/placeholderUtils";
+import {
+  createTemplate,
+  PlaceholderInputType,
+  PlaceholderSettings,
+  PlaceholderValues,
+  Template,
+  replacePlaceholders,
+} from "@/utils/templateUtils";
 import SideMenu from "./components/SideMenu";
 import EditTemplateModal from "./components/EditTemplateModal";
-
-interface PlaceholderValues {
-  [key: string]: string;
-}
-
-export interface PlaceholderSettings {
-  [key: string]: {
-    type: "text" | "list";
-    options?: string[];
-  };
-}
-
-export interface Template {
-  name: string;
-  contents: string[];
-  scenes: { name: string; values: PlaceholderValues }[];
-}
+import PlaceholderSettingsModal from "./components/PlaceholderSettingsModal";
 
 export default function TemplateEditorPage() {
-  const [templates, setTemplates] = useState<Template[]>([]); // 初期状態を空配列に設定
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [activeTemplateIndex, setActiveTemplateIndex] = useState<number>(0);
   const [activeSceneIndex, setActiveSceneIndex] = useState<number>(0);
-  const [placeholders, setPlaceholders] = useState<string[]>([]);
   const [placeholderSettings, setPlaceholderSettings] =
     useState<PlaceholderSettings>({});
   const [showTooltip, setShowTooltip] = useState<number | null>(null);
@@ -47,28 +41,55 @@ export default function TemplateEditorPage() {
     null
   );
 
-  const activeTemplate = templates[activeTemplateIndex] || {
-    name: "",
-    contents: [],
-    scenes: [],
-  };
+  const activeTemplate =
+    templates[activeTemplateIndex] ??
+    ({
+      ...createTemplate(""),
+      contents: [],
+    } satisfies Template);
+  const activeSceneValues =
+    activeTemplate.scenes[activeSceneIndex]?.values ?? {};
+
+  const placeholders = useMemo(
+    () => extractPlaceholders(activeTemplate.contents),
+    [activeTemplate.contents]
+  );
 
   useEffect(() => {
-    const storedTemplates = getStoredTemplates();
-    setTemplates(storedTemplates);
+    setTemplates(getStoredTemplates());
   }, []);
 
   useEffect(() => {
     saveTemplatesToStorage(templates);
   }, [templates]);
 
-  const evaluatePlaceholdersWrapper = () => {
-    const { placeholders, updatedSettings } = evaluatePlaceholders(
-      activeTemplate.contents,
-      placeholderSettings
+  useEffect(() => {
+    setPlaceholderSettings((currentSettings) =>
+      ensurePlaceholderSettings(placeholders, currentSettings)
     );
-    setPlaceholders(placeholders);
-    setPlaceholderSettings(updatedSettings);
+  }, [placeholders]);
+
+  const updateActiveTemplate = (
+    updater: (template: Template) => Template
+  ): void => {
+    setTemplates((currentTemplates) =>
+      currentTemplates.map((template, index) =>
+        index === activeTemplateIndex ? updater(template) : template
+      )
+    );
+  };
+
+  const updateActiveSceneValues = (
+    updater: (values: PlaceholderValues) => PlaceholderValues
+  ): void => {
+    updateActiveTemplate((template) => ({
+      ...template,
+      scenes: template.scenes.map((scene, index) =>
+        index === activeSceneIndex
+          ? { ...scene, values: updater(scene.values) }
+          : scene
+      ),
+    }));
   };
 
   const handleTemplateChange = (
@@ -76,53 +97,52 @@ export default function TemplateEditorPage() {
     e: React.ChangeEvent<HTMLTextAreaElement>
   ) => {
     const value = e.target.value;
-    const updatedTemplates = [...templates];
-    updatedTemplates[activeTemplateIndex].contents[index] = value;
-    setTemplates(updatedTemplates);
-    evaluatePlaceholdersWrapper();
+    updateActiveTemplate((template) => ({
+      ...template,
+      contents: template.contents.map((content, contentIndex) =>
+        contentIndex === index ? value : content
+      ),
+    }));
   };
 
   const handleAddTextarea = () => {
-    const updatedTemplates = [...templates];
-    updatedTemplates[activeTemplateIndex].contents.push("");
-    setTemplates(updatedTemplates);
-    evaluatePlaceholdersWrapper();
+    updateActiveTemplate((template) => ({
+      ...template,
+      contents: [...template.contents, ""],
+    }));
   };
 
   const handleRemoveTextarea = (index: number) => {
-    const updatedTemplates = [...templates];
-    updatedTemplates[activeTemplateIndex].contents.splice(index, 1);
-    setTemplates(updatedTemplates);
-    evaluatePlaceholdersWrapper();
+    updateActiveTemplate((template) => ({
+      ...template,
+      contents: template.contents.filter((_, contentIndex) => contentIndex !== index),
+    }));
   };
 
   const handleCopy = (index: number) => {
     navigator.clipboard.writeText(
-      activeTemplate.contents[index].replace(
-        /{(.*?)}/g,
-        (_, key) =>
-          activeTemplate.scenes[activeSceneIndex].values[key] || `{${key}}`
-      )
+      replacePlaceholders(activeTemplate.contents[index], activeSceneValues)
     );
     setShowTooltip(index);
     setTimeout(() => setShowTooltip(null), 2000);
   };
 
   const handlePlaceholderChange = (key: string, value: string) => {
-    const updatedTemplates = [...templates];
-    updatedTemplates[activeTemplateIndex].scenes[activeSceneIndex].values[key] =
-      value;
-    updatedTemplates[activeTemplateIndex].contents = updatedTemplates[
-      activeTemplateIndex
-    ].contents.map((content, index) =>
-      `テキストエリア ${index + 1}` === key ? value : content
-    );
-    setTemplates(updatedTemplates);
+    updateActiveSceneValues((values) => ({
+      ...values,
+      [key]: value,
+    }));
+    updateActiveTemplate((template) => ({
+      ...template,
+      contents: template.contents.map((content, index) =>
+        `テキストエリア ${index + 1}` === key ? value : content
+      ),
+    }));
   };
 
   const handlePlaceholderSettingChange = (
     key: string,
-    type: "text" | "list"
+    type: PlaceholderInputType
   ) => {
     setPlaceholderSettings((prev) => ({
       ...prev,
@@ -132,8 +152,7 @@ export default function TemplateEditorPage() {
 
   const handleAddListOption = (
     key: string,
-    option: string,
-    clearInput: () => void
+    option: string
   ) => {
     setPlaceholderSettings((prev) => ({
       ...prev,
@@ -142,7 +161,6 @@ export default function TemplateEditorPage() {
         options: [...(prev[key].options || []), option],
       },
     }));
-    clearInput(); // 入力フォームの値をクリア
   };
 
   const handleRemoveListOption = (key: string, index: number) => {
@@ -174,7 +192,8 @@ export default function TemplateEditorPage() {
     reader.onload = (event) => {
       const importedTemplates = JSON.parse(event.target?.result as string);
       setTemplates(importedTemplates);
-      localStorage.setItem("templates", JSON.stringify(importedTemplates));
+      setActiveTemplateIndex(0);
+      setActiveSceneIndex(0);
     };
     reader.readAsText(file);
   };
@@ -192,15 +211,8 @@ export default function TemplateEditorPage() {
   const openEditTemplateModal = (placeholder: string) => {
     setCurrentPlaceholder(placeholder);
     setShowEditTemplateModal(true);
-    setTimeout(() => {
-      const textarea = document.getElementById("edit-modal-textarea");
-      if (textarea) {
-        textarea.focus();
-      }
-    }, 0);
   };
 
-  // モーダルを閉じた際にテキストエリアのフォーカスを外す
   const closeEditTemplateModal = () => {
     setCurrentPlaceholder(null);
     setShowEditTemplateModal(false);
@@ -210,17 +222,10 @@ export default function TemplateEditorPage() {
   };
 
   const addTemplate = () => {
-    setTemplates([
-      ...templates,
-      {
-        name: `テンプレート${templates.length + 1}`,
-        contents: [""],
-        scenes: [{ name: "デフォルト", values: {} }],
-      },
-    ]);
+    const newTemplate = createTemplate(`テンプレート${templates.length + 1}`);
+    setTemplates((currentTemplates) => [...currentTemplates, newTemplate]);
     setActiveTemplateIndex(templates.length);
     setActiveSceneIndex(0);
-    setPlaceholders([]);
   };
 
   const handleDeleteTemplate = (index: number) => {
@@ -234,7 +239,6 @@ export default function TemplateEditorPage() {
     }
   };
 
-  // モーダルとテキストエリアの値を連動させる
   const handleTextareaFocus = (index: number) => {
     const placeholder = `テキストエリア ${index + 1}`;
     setCurrentPlaceholder(placeholder);
@@ -242,19 +246,6 @@ export default function TemplateEditorPage() {
     handlePlaceholderChange(placeholder, value);
     openEditTemplateModal(placeholder);
   };
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        closeEditTemplateModal();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
 
   return (
     <div className="flex h-screen">
@@ -280,12 +271,12 @@ export default function TemplateEditorPage() {
               type="text"
               className="input-text"
               value={activeTemplate.name}
-              onChange={(e) => {
-                const value = e.target.value;
-                const updatedTemplates = [...templates];
-                updatedTemplates[activeTemplateIndex].name = value;
-                setTemplates(updatedTemplates);
-              }}
+              onChange={(e) =>
+                updateActiveTemplate((template) => ({
+                  ...template,
+                  name: e.target.value,
+                }))
+              }
             />
           </div>
         </div>
@@ -353,11 +344,7 @@ export default function TemplateEditorPage() {
                       {placeholderSettings[placeholder]?.type === "list" ? (
                         <select
                           className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          value={
-                            activeTemplate.scenes[activeSceneIndex].values[
-                              placeholder
-                            ] || ""
-                          }
+                          value={activeSceneValues[placeholder] || ""}
                           onChange={(e) =>
                             handlePlaceholderChange(placeholder, e.target.value)
                           }
@@ -375,11 +362,7 @@ export default function TemplateEditorPage() {
                         <input
                           type="text"
                           className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          value={
-                            activeTemplate.scenes[activeSceneIndex].values[
-                              placeholder
-                            ] || ""
-                          }
+                          value={activeSceneValues[placeholder] || ""}
                           onChange={(e) =>
                             handlePlaceholderChange(placeholder, e.target.value)
                           }
@@ -406,142 +389,32 @@ export default function TemplateEditorPage() {
 
       {/* モーダル */}
       {showModal && currentPlaceholder && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">
-              {currentPlaceholder}の設定
-            </h2>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                入力タイプ
-              </label>
-              <div className="flex items-center space-x-4">
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="input-type"
-                    value="text"
-                    checked={
-                      placeholderSettings[currentPlaceholder]?.type === "text"
-                    }
-                    onChange={() =>
-                      handlePlaceholderSettingChange(currentPlaceholder, "text")
-                    }
-                  />
-                  <span>フリーテキスト</span>
-                </label>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="input-type"
-                    value="list"
-                    checked={
-                      placeholderSettings[currentPlaceholder]?.type === "list"
-                    }
-                    onChange={() =>
-                      handlePlaceholderSettingChange(currentPlaceholder, "list")
-                    }
-                  />
-                  <span>リスト選択</span>
-                </label>
-              </div>
-            </div>
-            {placeholderSettings[currentPlaceholder]?.type === "list" && (
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">
-                  リストオプション
-                </h4>
-                <div className="space-y-2">
-                  {placeholderSettings[currentPlaceholder]?.options?.map(
-                    (option, index) => (
-                      <div key={index} className="flex items-center space-x-2">
-                        <span className="flex-1 p-2 bg-gray-100 border border-gray-300 rounded-md">
-                          {option}
-                        </span>
-                        <button
-                          className="px-2 py-1 bg-red-500 text-white rounded-md hover:bg-red-600"
-                          onClick={() =>
-                            handleRemoveListOption(currentPlaceholder, index)
-                          }
-                        >
-                          削除
-                        </button>
-                      </div>
-                    )
-                  )}
-                </div>
-                <div className="flex items-center space-x-2 mt-4">
-                  <input
-                    type="text"
-                    className="flex-1 p-2 border border-gray-300 rounded-md"
-                    placeholder="オプションを追加"
-                    ref={(input) => {
-                      if (input) input.value = ""; // 初期化
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && e.currentTarget.value) {
-                        handleAddListOption(
-                          currentPlaceholder,
-                          e.currentTarget.value,
-                          () => (e.currentTarget.value = "")
-                        );
-                      }
-                    }}
-                  />
-                  <button
-                    className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-                    onClick={(e) => {
-                      const input = e.currentTarget
-                        .previousSibling as HTMLInputElement;
-                      if (input && input.value) {
-                        handleAddListOption(
-                          currentPlaceholder,
-                          input.value,
-                          () => (input.value = "")
-                        );
-                      }
-                    }}
-                  >
-                    追加
-                  </button>
-                </div>
-              </div>
-            )}
-            <div className="mt-6 flex justify-end space-x-2">
-              <button
-                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
-                onClick={closeModal}
-              >
-                キャンセル
-              </button>
-              <button
-                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-                onClick={closeModal}
-              >
-                保存
-              </button>
-            </div>
-          </div>
-        </div>
+        <PlaceholderSettingsModal
+          key={currentPlaceholder}
+          placeholder={currentPlaceholder}
+          settings={placeholderSettings[currentPlaceholder]}
+          onTypeChange={(type) =>
+            handlePlaceholderSettingChange(currentPlaceholder, type)
+          }
+          onAddOption={(option) => handleAddListOption(currentPlaceholder, option)}
+          onRemoveOption={(index) =>
+            handleRemoveListOption(currentPlaceholder, index)
+          }
+          onClose={closeModal}
+        />
       )}
 
       {/* 編集用モーダル */}
       {showEditTemplateModal && currentPlaceholder && (
         <EditTemplateModal
           placeholder={currentPlaceholder}
-          value={
-            activeTemplate.scenes[activeSceneIndex].values[
-              currentPlaceholder
-            ] || ""
-          }
+          value={activeSceneValues[currentPlaceholder] || ""}
           onChange={(value) => {
             handlePlaceholderChange(currentPlaceholder, value);
-            evaluatePlaceholdersWrapper();
           }}
           onClose={closeEditTemplateModal}
           onClear={() => {
             handlePlaceholderChange(currentPlaceholder, "");
-            evaluatePlaceholdersWrapper();
           }}
         />
       )}

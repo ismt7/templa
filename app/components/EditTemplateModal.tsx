@@ -39,6 +39,7 @@ const EditModal: React.FC<EditModalProps> = ({
         <textarea
           id="edit-modal-textarea"
           className="flex-1 w-full p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          autoFocus
           value={value}
           onChange={(e) => onChange(e.target.value)}
         />

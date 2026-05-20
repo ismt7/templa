@@ -6,7 +6,7 @@ import {
   ArrowUpTrayIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
-import { Template } from "../page";
+import { Template } from "@/utils/templateUtils";
 
 interface SideMenuProps {
   templates: Template[];

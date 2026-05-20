@@ -1,26 +1,14 @@
-import { Template } from "@/app/page";
+import { createTemplate, Template } from "@/utils/templateUtils";
+
+const getDefaultTemplates = (): Template[] => [createTemplate()];
 
 export const getStoredTemplates = (): Template[] => {
   if (typeof window === "undefined") {
-    return [
-      {
-        name: "デフォルト",
-        contents: [""],
-        scenes: [{ name: "デフォルト", values: {} }],
-      },
-    ];
+    return getDefaultTemplates();
   }
 
   const storedTemplates = localStorage.getItem("templates");
-  return storedTemplates
-    ? JSON.parse(storedTemplates)
-    : [
-        {
-          name: "デフォルト",
-          contents: [""],
-          scenes: [{ name: "デフォルト", values: {} }],
-        },
-      ];
+  return storedTemplates ? JSON.parse(storedTemplates) : getDefaultTemplates();
 };
 
 export const saveTemplatesToStorage = (templates: Template[]): void => {
