@@ -19,6 +19,10 @@ const EditModal: React.FC<EditModalProps> = ({
 }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) {
+        return;
+      }
+
       if (e.key === "Escape") {
         onClose();
       }
@@ -41,6 +45,11 @@ const EditModal: React.FC<EditModalProps> = ({
           className="flex-1 w-full p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
           autoFocus
           value={value}
+          onKeyDown={(e) => {
+            if (e.metaKey || e.ctrlKey) {
+              e.stopPropagation();
+            }
+          }}
           onChange={(e) => onChange(e.target.value)}
         />
         <div className="mt-6 flex justify-between">

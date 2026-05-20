@@ -18,7 +18,10 @@ import {
 } from "@/utils/placeholderUtils";
 import {
   createTemplate,
+  DEFAULT_PLACEHOLDER_DATE_FORMAT,
+  PlaceholderDateFormat,
   PlaceholderInputType,
+  PlaceholderSetting,
   PlaceholderSettings,
   PlaceholderValues,
   Template,
@@ -107,6 +110,41 @@ const copyTextToClipboard = async (text: string): Promise<void> => {
 
 const getTextareaPlaceholderLabel = (index: number): string =>
   `テキストエリア ${index + 1}`;
+
+const DATE_INPUT_VALUE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+const createPlaceholderSetting = (
+  type: PlaceholderInputType,
+  currentSetting?: PlaceholderSetting
+): PlaceholderSetting => {
+  switch (type) {
+    case "list":
+      return {
+        type,
+        options: currentSetting?.options ?? [],
+      };
+    case "date":
+      return {
+        type,
+        dateFormat:
+          currentSetting?.dateFormat ?? DEFAULT_PLACEHOLDER_DATE_FORMAT,
+      };
+    case "text":
+    default:
+      return { type };
+  }
+};
+
+const getInputValueForPlaceholder = (
+  value: string | undefined,
+  setting?: PlaceholderSetting
+): string => {
+  if (setting?.type !== "date") {
+    return value ?? "";
+  }
+
+  return value && DATE_INPUT_VALUE_PATTERN.test(value) ? value : "";
+};
 
 export default function TemplateEditorPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -272,7 +310,11 @@ export default function TemplateEditorPage() {
   const handleCopy = async (index: number) => {
     try {
       await copyTextToClipboard(
-        replacePlaceholders(activeTemplate.contents[index], activeSceneValues)
+        replacePlaceholders(
+          activeTemplate.contents[index],
+          activeSceneValues,
+          placeholderSettings
+        )
       );
       setCopyFeedback({ index, status: "success" });
     } catch (error) {
@@ -309,7 +351,20 @@ export default function TemplateEditorPage() {
   ) => {
     setPlaceholderSettings((prev) => ({
       ...prev,
-      [key]: { type, options: type === "list" ? [] : undefined },
+      [key]: createPlaceholderSetting(type, prev[key]),
+    }));
+  };
+
+  const handleDateFormatChange = (
+    key: string,
+    dateFormat: PlaceholderDateFormat
+  ) => {
+    setPlaceholderSettings((prev) => ({
+      ...prev,
+      [key]: {
+        ...createPlaceholderSetting("date", prev[key]),
+        dateFormat,
+      },
     }));
   };
 
@@ -549,9 +604,16 @@ export default function TemplateEditorPage() {
                             </select>
                           ) : (
                             <input
-                              type="text"
+                              type={
+                                placeholderSettings[placeholder]?.type === "date"
+                                  ? "date"
+                                  : "text"
+                              }
                               className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              value={activeSceneValues[placeholder] || ""}
+                              value={getInputValueForPlaceholder(
+                                activeSceneValues[placeholder],
+                                placeholderSettings[placeholder]
+                              )}
                               onChange={(e) =>
                                 handlePlaceholderChange(
                                   placeholder,
@@ -605,6 +667,9 @@ export default function TemplateEditorPage() {
           settings={placeholderSettings[currentPlaceholder]}
           onTypeChange={(type) =>
             handlePlaceholderSettingChange(currentPlaceholder, type)
+          }
+          onDateFormatChange={(format) =>
+            handleDateFormatChange(currentPlaceholder, format)
           }
           onAddOption={(option) => handleAddListOption(currentPlaceholder, option)}
           onRemoveOption={(index) =>

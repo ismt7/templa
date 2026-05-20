@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import {
+  DEFAULT_PLACEHOLDER_DATE_FORMAT,
+  PlaceholderDateFormat,
   PlaceholderInputType,
   PlaceholderSetting,
 } from "@/utils/templateUtils";
@@ -10,6 +12,7 @@ interface PlaceholderSettingsModalProps {
   placeholder: string;
   settings?: PlaceholderSetting;
   onTypeChange: (type: PlaceholderInputType) => void;
+  onDateFormatChange: (format: PlaceholderDateFormat) => void;
   onAddOption: (option: string) => void;
   onRemoveOption: (index: number) => void;
   onClose: () => void;
@@ -19,11 +22,25 @@ export default function PlaceholderSettingsModal({
   placeholder,
   settings,
   onTypeChange,
+  onDateFormatChange,
   onAddOption,
   onRemoveOption,
   onClose,
 }: PlaceholderSettingsModalProps) {
   const [newOption, setNewOption] = useState("");
+  const dateFormatExamples = [
+    "YYYY-MM-DD",
+    "YYYY/MM/DD",
+    "YYYY年M月D日",
+  ] satisfies PlaceholderDateFormat[];
+
+  const preserveInputShortcuts = (
+    e: React.KeyboardEvent<HTMLInputElement>
+  ) => {
+    if (e.metaKey || e.ctrlKey) {
+      e.stopPropagation();
+    }
+  };
 
   const handleAddOption = () => {
     const trimmedOption = newOption.trim();
@@ -66,6 +83,16 @@ export default function PlaceholderSettingsModal({
               />
               <span>リスト選択</span>
             </label>
+            <label className="flex items-center space-x-2">
+              <input
+                type="radio"
+                name="input-type"
+                value="date"
+                checked={settings?.type === "date"}
+                onChange={() => onTypeChange("date")}
+              />
+              <span>日付</span>
+            </label>
           </div>
         </div>
         {settings?.type === "list" && (
@@ -96,7 +123,13 @@ export default function PlaceholderSettingsModal({
                 value={newOption}
                 onChange={(e) => setNewOption(e.target.value)}
                 onKeyDown={(e) => {
+                  preserveInputShortcuts(e);
+                  if (e.metaKey || e.ctrlKey || e.altKey) {
+                    return;
+                  }
+
                   if (e.key === "Enter") {
+                    e.preventDefault();
                     handleAddOption();
                   }
                 }}
@@ -107,6 +140,37 @@ export default function PlaceholderSettingsModal({
               >
                 追加
               </button>
+            </div>
+          </div>
+        )}
+        {settings?.type === "date" && (
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-2">
+              日付の表示形式
+            </h4>
+            <input
+              type="text"
+              className="w-full p-2 border border-gray-300 rounded-md"
+              autoFocus
+              value={settings.dateFormat ?? DEFAULT_PLACEHOLDER_DATE_FORMAT}
+              placeholder={DEFAULT_PLACEHOLDER_DATE_FORMAT}
+              onKeyDown={preserveInputShortcuts}
+              onChange={(e) => onDateFormatChange(e.target.value)}
+            />
+            <p className="mt-2 text-xs text-gray-500">
+              `YYYY` `YY` `MM` `M` `DD` `D` を組み合わせて自由に指定できます。
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {dateFormatExamples.map((format) => (
+                <button
+                  key={format}
+                  type="button"
+                  className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                  onClick={() => onDateFormatChange(format)}
+                >
+                  {format}
+                </button>
+              ))}
             </div>
           </div>
         )}
