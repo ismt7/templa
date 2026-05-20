@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ClipboardDocumentIcon,
   PlusIcon,
@@ -71,6 +71,39 @@ const replaceTemplateIndexInUrl = (templateIndex: number | null): void => {
   window.history.replaceState(window.history.state, "", nextRelativeUrl);
 };
 
+const copyTextToClipboard = async (text: string): Promise<void> => {
+  if (typeof navigator !== "undefined") {
+    const writeText = navigator.clipboard?.writeText;
+
+    if (typeof writeText === "function") {
+      await writeText.call(navigator.clipboard, text);
+      return;
+    }
+  }
+
+  if (typeof document === "undefined") {
+    throw new Error("Clipboard API is unavailable.");
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+
+  try {
+    if (!document.execCommand("copy")) {
+      throw new Error("Fallback copy command failed.");
+    }
+  } finally {
+    document.body.removeChild(textarea);
+  }
+};
+
 export default function TemplateEditorPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [hasLoadedTemplates, setHasLoadedTemplates] = useState<boolean>(false);
@@ -80,13 +113,17 @@ export default function TemplateEditorPage() {
   const [activeSceneIndex, setActiveSceneIndex] = useState<number>(0);
   const [placeholderSettings, setPlaceholderSettings] =
     useState<PlaceholderSettings>({});
-  const [showTooltip, setShowTooltip] = useState<number | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<{
+    index: number;
+    status: "success" | "error";
+  } | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
   const [showEditTemplateModal, setShowEditTemplateModal] =
     useState<boolean>(false);
   const [currentPlaceholder, setCurrentPlaceholder] = useState<string | null>(
     null
   );
+  const copyFeedbackTimeoutRef = useRef<number | null>(null);
 
   const activeTemplate =
     templates[activeTemplateIndex] ??
@@ -170,6 +207,14 @@ export default function TemplateEditorPage() {
     }
   }, [activeTemplateIndex, hasLoadedTemplates, templates.length]);
 
+  useEffect(() => {
+    return () => {
+      if (copyFeedbackTimeoutRef.current !== null) {
+        window.clearTimeout(copyFeedbackTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const updateActiveTemplate = (
     updater: (template: Template) => Template
   ): void => {
@@ -220,12 +265,25 @@ export default function TemplateEditorPage() {
     }));
   };
 
-  const handleCopy = (index: number) => {
-    navigator.clipboard.writeText(
-      replacePlaceholders(activeTemplate.contents[index], activeSceneValues)
-    );
-    setShowTooltip(index);
-    setTimeout(() => setShowTooltip(null), 2000);
+  const handleCopy = async (index: number) => {
+    try {
+      await copyTextToClipboard(
+        replacePlaceholders(activeTemplate.contents[index], activeSceneValues)
+      );
+      setCopyFeedback({ index, status: "success" });
+    } catch (error) {
+      console.error("Failed to copy text.", error);
+      setCopyFeedback({ index, status: "error" });
+    }
+
+    if (copyFeedbackTimeoutRef.current !== null) {
+      window.clearTimeout(copyFeedbackTimeoutRef.current);
+    }
+
+    copyFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setCopyFeedback(null);
+      copyFeedbackTimeoutRef.current = null;
+    }, 2000);
   };
 
   const handlePlaceholderChange = (key: string, value: string) => {
@@ -401,7 +459,9 @@ export default function TemplateEditorPage() {
                 <div className="absolute top-2 right-2 flex space-x-2">
                   <button
                     className="button-action button-action-copy"
-                    onClick={() => handleCopy(index)}
+                    onClick={() => {
+                      void handleCopy(index);
+                    }}
                   >
                     <ClipboardDocumentIcon className="w-5 h-5" />
                   </button>
@@ -412,9 +472,17 @@ export default function TemplateEditorPage() {
                     <TrashIcon className="w-5 h-5" />
                   </button>
                 </div>
-                {showTooltip === index && (
-                  <div className="absolute top-12 right-2 px-3 py-2 bg-gray-800 text-white text-sm rounded-lg shadow-lg">
-                    コピーしました！
+                {copyFeedback?.index === index && (
+                  <div
+                    className={`absolute top-12 right-2 px-3 py-2 text-white text-sm rounded-lg shadow-lg ${
+                      copyFeedback.status === "success"
+                        ? "bg-gray-800"
+                        : "bg-red-600"
+                    }`}
+                  >
+                    {copyFeedback.status === "success"
+                      ? "コピーしました！"
+                      : "コピーに失敗しました"}
                   </div>
                 )}
               </div>
