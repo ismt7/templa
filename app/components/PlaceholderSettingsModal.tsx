@@ -32,6 +32,8 @@ export default function PlaceholderSettingsModal({
     "YYYY-MM-DD",
     "YYYY/MM/DD",
     "YYYY年M月D日",
+    "YYYY-MM-DD(AAA)",
+    "YYYY年M月D日 AAAA",
   ] satisfies PlaceholderDateFormat[];
 
   const preserveInputShortcuts = (
@@ -158,7 +160,9 @@ export default function PlaceholderSettingsModal({
               onChange={(e) => onDateFormatChange(e.target.value)}
             />
             <p className="mt-2 text-xs text-gray-500">
-              `YYYY` `YY` `MM` `M` `DD` `D` を組み合わせて自由に指定できます。
+              `YYYY` `YY` `MM` `M` `DD` `D` `A` `AA` `AAA` `AAAA`
+              を組み合わせて自由に指定できます。曜日は `A` / `AA` が
+              `月`、`AAA` が `月曜`、`AAAA` が `月曜日` です。
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {dateFormatExamples.map((format) => (

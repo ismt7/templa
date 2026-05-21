@@ -39,7 +39,50 @@ export const createTemplate = (name = "デフォルト"): Template => ({
 });
 
 const DATE_INPUT_VALUE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
-const DATE_FORMAT_TOKEN_PATTERN = /YYYY|YY|MM|DD|M|D/g;
+const DATE_FORMAT_TOKEN_PATTERN = /YYYY|AAAA|AAA|AA|A|YY|MM|DD|M|D/g;
+const WEEKDAY_SHORT_NAMES = ["日", "月", "火", "水", "木", "金", "土"];
+const WEEKDAY_MEDIUM_NAMES = [
+  "日曜",
+  "月曜",
+  "火曜",
+  "水曜",
+  "木曜",
+  "金曜",
+  "土曜",
+];
+const WEEKDAY_LONG_NAMES = [
+  "日曜日",
+  "月曜日",
+  "火曜日",
+  "水曜日",
+  "木曜日",
+  "金曜日",
+  "土曜日",
+];
+
+const getFormattedWeekday = (
+  year: string,
+  month: string,
+  day: string,
+  token: "A" | "AA" | "AAA" | "AAAA"
+): string => {
+  const weekdayIndex = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day)
+  ).getDay();
+
+  switch (token) {
+    case "AAA":
+      return WEEKDAY_MEDIUM_NAMES[weekdayIndex];
+    case "AAAA":
+      return WEEKDAY_LONG_NAMES[weekdayIndex];
+    case "A":
+    case "AA":
+    default:
+      return WEEKDAY_SHORT_NAMES[weekdayIndex];
+  }
+};
 
 const formatDateValue = (
   value: string,
@@ -72,6 +115,11 @@ const formatDateValue = (
           return day;
         case "D":
           return unpaddedDay;
+        case "A":
+        case "AA":
+        case "AAA":
+        case "AAAA":
+          return getFormattedWeekday(year, month, day, token);
         default:
           return token;
       }
