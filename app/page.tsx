@@ -15,6 +15,7 @@ import {
 } from "@/utils/localStorageUtils";
 import {
   evaluatePlaceholders,
+  insertPlaceholderAtSelection,
   normalizePlaceholderName,
 } from "@/utils/placeholderUtils";
 import {
@@ -125,6 +126,11 @@ const getTextareaPlaceholderLabel = (index: number): string =>
 const DATE_INPUT_VALUE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const NO_INSERTION_TARGET = "none";
 
+interface TextSelectionRange {
+  start: number;
+  end: number;
+}
+
 const createPlaceholderSetting = (
   type: PlaceholderInputType,
   currentSetting?: PlaceholderSetting
@@ -188,6 +194,9 @@ export default function TemplateEditorPage() {
   const [currentPlaceholder, setCurrentPlaceholder] = useState<string | null>(
     null
   );
+  const [editingTextareaIndex, setEditingTextareaIndex] = useState<number | null>(
+    null
+  );
   const [newPlaceholderName, setNewPlaceholderName] = useState<string>("");
   const [newPlaceholderInsertTarget, setNewPlaceholderInsertTarget] =
     useState<string>(NO_INSERTION_TARGET);
@@ -195,6 +204,14 @@ export default function TemplateEditorPage() {
     null
   );
   const copyFeedbackTimeoutRef = useRef<number | null>(null);
+  const inlineTextareaRefs = useRef<Array<HTMLTextAreaElement | null>>([]);
+  const inlineTextareaSelectionsRef = useRef<Record<number, TextSelectionRange>>(
+    {}
+  );
+  const pendingInlineSelectionRef = useRef<{
+    index: number;
+    selection: TextSelectionRange;
+  } | null>(null);
 
   const activeTemplate =
     templates[activeTemplateIndex] ??
@@ -262,6 +279,27 @@ export default function TemplateEditorPage() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const pendingSelection = pendingInlineSelectionRef.current;
+
+    if (!pendingSelection) {
+      return;
+    }
+
+    const textarea = inlineTextareaRefs.current[pendingSelection.index];
+
+    if (!textarea) {
+      return;
+    }
+
+    textarea.focus();
+    textarea.setSelectionRange(
+      pendingSelection.selection.start,
+      pendingSelection.selection.end
+    );
+    pendingInlineSelectionRef.current = null;
+  }, [activeTemplate.contents]);
 
   const applyTemplateSelection = useCallback(
     (
@@ -378,6 +416,18 @@ export default function TemplateEditorPage() {
     [activeSceneIndex, updateActiveTemplate]
   );
 
+  const updateActiveTemplateContent = useCallback(
+    (index: number, value: string): void => {
+      updateActiveTemplate((template) => ({
+        ...template,
+        contents: template.contents.map((content, contentIndex) =>
+          contentIndex === index ? value : content
+        ),
+      }));
+    },
+    [updateActiveTemplate]
+  );
+
   useEffect(() => {
     if (!hasTemplates || placeholderSettings === activeTemplate.placeholderSettings) {
       return;
@@ -410,18 +460,57 @@ export default function TemplateEditorPage() {
     }
   }, [activeTemplate.contents.length, newPlaceholderInsertTarget]);
 
+  const updateInlineTextareaSelection = useCallback(
+    (index: number, target: HTMLTextAreaElement): void => {
+      inlineTextareaSelectionsRef.current[index] = {
+        start: target.selectionStart ?? target.value.length,
+        end: target.selectionEnd ?? target.value.length,
+      };
+    },
+    []
+  );
+
   const handleTemplateChange = (
     index: number,
     e: React.ChangeEvent<HTMLTextAreaElement>
   ) => {
-    const value = e.target.value;
-    updateActiveTemplate((template) => ({
-      ...template,
-      contents: template.contents.map((content, contentIndex) =>
-        contentIndex === index ? value : content
-      ),
-    }));
+    updateInlineTextareaSelection(index, e.target);
+    updateActiveTemplateContent(index, e.target.value);
   };
+
+  const handleInsertPlaceholderIntoTextarea = useCallback(
+    (index: number, placeholder: string): void => {
+      const currentContent = activeTemplate.contents[index] ?? "";
+      const textarea = inlineTextareaRefs.current[index];
+      const previousSelection = inlineTextareaSelectionsRef.current[index];
+      const selectionStart =
+        textarea?.selectionStart ??
+        previousSelection?.start ??
+        currentContent.length;
+      const selectionEnd =
+        textarea?.selectionEnd ?? previousSelection?.end ?? selectionStart;
+      const insertionResult = insertPlaceholderAtSelection(
+        currentContent,
+        placeholder,
+        selectionStart,
+        selectionEnd
+      );
+
+      inlineTextareaSelectionsRef.current[index] = {
+        start: insertionResult.selectionStart,
+        end: insertionResult.selectionEnd,
+      };
+      pendingInlineSelectionRef.current = {
+        index,
+        selection: {
+          start: insertionResult.selectionStart,
+          end: insertionResult.selectionEnd,
+        },
+      };
+      updateActiveTemplateContent(index, insertionResult.content);
+    },
+    [activeTemplate.contents, updateActiveTemplateContent]
+  );
 
   const handleAddTextarea = () => {
     updateActiveTemplate((template) => ({
@@ -431,6 +520,11 @@ export default function TemplateEditorPage() {
   };
 
   const handleRemoveTextarea = (index: number) => {
+    if (editingTextareaIndex === index) {
+      closeEditTemplateModal();
+    }
+
+    delete inlineTextareaSelectionsRef.current[index];
     updateActiveTemplate((template) => ({
       ...template,
       contents: template.contents.filter((_, contentIndex) => contentIndex !== index),
@@ -466,12 +560,6 @@ export default function TemplateEditorPage() {
     updateActiveSceneValues((values) => ({
       ...values,
       [key]: value,
-    }));
-    updateActiveTemplate((template) => ({
-      ...template,
-      contents: template.contents.map((content, index) =>
-        getTextareaPlaceholderLabel(index) === key ? value : content
-      ),
     }));
   };
 
@@ -638,13 +726,8 @@ export default function TemplateEditorPage() {
     setShowModal(false);
   };
 
-  const openEditTemplateModal = (placeholder: string) => {
-    setCurrentPlaceholder(placeholder);
-    setShowEditTemplateModal(true);
-  };
-
   const closeEditTemplateModal = () => {
-    setCurrentPlaceholder(null);
+    setEditingTextareaIndex(null);
     setShowEditTemplateModal(false);
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
@@ -668,6 +751,7 @@ export default function TemplateEditorPage() {
     if (updatedTemplates.length === 0) {
       applyTemplateSelection(0, 0);
       setCurrentPlaceholder(null);
+      setEditingTextareaIndex(null);
       setShowModal(false);
       setShowEditTemplateModal(false);
       return;
@@ -679,11 +763,8 @@ export default function TemplateEditorPage() {
   };
 
   const handleEditTemplateClick = (index: number) => {
-    const placeholder = getTextareaPlaceholderLabel(index);
-    setCurrentPlaceholder(placeholder);
-    const value = activeTemplate.contents[index];
-    handlePlaceholderChange(placeholder, value);
-    openEditTemplateModal(placeholder);
+    setEditingTextareaIndex(index);
+    setShowEditTemplateModal(true);
   };
 
   return (
@@ -725,9 +806,21 @@ export default function TemplateEditorPage() {
             {activeTemplate.contents.map((content, index) => (
               <div key={index} className="mb-2 relative">
                 <textarea
+                  ref={(element) => {
+                    inlineTextareaRefs.current[index] = element;
+                  }}
                   className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
                   placeholder={`テキストエリア ${index + 1}`}
                   value={content}
+                  onSelect={(e) =>
+                    updateInlineTextareaSelection(index, e.currentTarget)
+                  }
+                  onClick={(e) =>
+                    updateInlineTextareaSelection(index, e.currentTarget)
+                  }
+                  onKeyUp={(e) =>
+                    updateInlineTextareaSelection(index, e.currentTarget)
+                  }
                   onChange={(e) => handleTemplateChange(index, e)}
                 />
                 <div className="absolute top-2 right-2 flex space-x-2">
@@ -764,8 +857,43 @@ export default function TemplateEditorPage() {
                     {copyFeedback.status === "success"
                       ? "コピーしました！"
                       : "コピーに失敗しました"}
-                  </div>
+                    </div>
                 )}
+                <div className="mt-2 flex items-center gap-3">
+                  <label
+                    htmlFor={`placeholder-insert-${index}`}
+                    className="shrink-0 text-sm font-medium text-gray-700"
+                  >
+                    プレースホルダーを挿入
+                  </label>
+                  <select
+                    id={`placeholder-insert-${index}`}
+                    className="w-full rounded-lg border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    defaultValue=""
+                    onChange={(e) => {
+                      const nextPlaceholder = e.target.value;
+
+                      if (!nextPlaceholder) {
+                        return;
+                      }
+
+                      handleInsertPlaceholderIntoTextarea(index, nextPlaceholder);
+                      e.target.value = "";
+                    }}
+                    disabled={placeholders.length === 0}
+                  >
+                    <option value="">
+                      {placeholders.length > 0
+                        ? "選択してください"
+                        : "挿入できるプレースホルダーがありません"}
+                    </option>
+                    {placeholders.map((placeholder) => (
+                      <option key={placeholder} value={placeholder}>
+                        {placeholder}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             ))}
 
@@ -974,17 +1102,19 @@ export default function TemplateEditorPage() {
       )}
 
       {/* 編集用モーダル */}
-      {hasTemplates && showEditTemplateModal && currentPlaceholder && (
+      {hasTemplates &&
+        showEditTemplateModal &&
+        editingTextareaIndex !== null &&
+        activeTemplate.contents[editingTextareaIndex] !== undefined && (
         <EditTemplateModal
-          placeholder={currentPlaceholder}
-          value={activeSceneValues[currentPlaceholder] || ""}
-          onChange={(value) => {
-            handlePlaceholderChange(currentPlaceholder, value);
-          }}
+          title={getTextareaPlaceholderLabel(editingTextareaIndex)}
+          value={activeTemplate.contents[editingTextareaIndex]}
+          placeholders={placeholders}
+          onChange={(value) =>
+            updateActiveTemplateContent(editingTextareaIndex, value)
+          }
           onClose={closeEditTemplateModal}
-          onClear={() => {
-            handlePlaceholderChange(currentPlaceholder, "");
-          }}
+          onClear={() => updateActiveTemplateContent(editingTextareaIndex, "")}
         />
       )}
     </div>

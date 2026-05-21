@@ -17,6 +17,43 @@ export const normalizePlaceholderName = (name: string): string => {
   return trimmedName;
 };
 
+export interface PlaceholderInsertionResult {
+  content: string;
+  selectionStart: number;
+  selectionEnd: number;
+}
+
+const normalizeSelectionPosition = (
+  position: number,
+  contentLength: number
+): number => {
+  if (!Number.isFinite(position)) {
+    return contentLength;
+  }
+
+  return Math.min(Math.max(position, 0), contentLength);
+};
+
+export const insertPlaceholderAtSelection = (
+  content: string,
+  placeholder: string,
+  selectionStart = content.length,
+  selectionEnd = selectionStart
+): PlaceholderInsertionResult => {
+  const start = normalizeSelectionPosition(selectionStart, content.length);
+  const end = normalizeSelectionPosition(selectionEnd, content.length);
+  const rangeStart = Math.min(start, end);
+  const rangeEnd = Math.max(start, end);
+  const token = `{${placeholder}}`;
+  const nextPosition = rangeStart + token.length;
+
+  return {
+    content: `${content.slice(0, rangeStart)}${token}${content.slice(rangeEnd)}`,
+    selectionStart: nextPosition,
+    selectionEnd: nextPosition,
+  };
+};
+
 export const mergePlaceholders = (
   manualPlaceholders: string[],
   extractedPlaceholders: string[]
