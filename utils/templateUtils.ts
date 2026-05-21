@@ -1,6 +1,6 @@
 export type PlaceholderValues = Record<string, string>;
 
-export type PlaceholderInputType = "text" | "list" | "date";
+export type PlaceholderInputType = "text" | "multiline" | "list" | "date";
 
 export type PlaceholderDateFormat = string;
 

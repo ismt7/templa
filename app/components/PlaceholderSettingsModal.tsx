@@ -79,6 +79,16 @@ export default function PlaceholderSettingsModal({
               <input
                 type="radio"
                 name="input-type"
+                value="multiline"
+                checked={settings?.type === "multiline"}
+                onChange={() => onTypeChange("multiline")}
+              />
+              <span>複数行テキスト</span>
+            </label>
+            <label className="flex items-center space-x-2">
+              <input
+                type="radio"
+                name="input-type"
                 value="list"
                 checked={settings?.type === "list"}
                 onChange={() => onTypeChange("list")}

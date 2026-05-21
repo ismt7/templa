@@ -20,7 +20,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isPlaceholderInputType = (
   value: unknown
 ): value is PlaceholderInputType =>
-  value === "text" || value === "list" || value === "date";
+  value === "text" ||
+  value === "multiline" ||
+  value === "list" ||
+  value === "date";
 
 const normalizePlaceholderSetting = (
   value: unknown

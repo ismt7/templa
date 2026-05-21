@@ -136,6 +136,8 @@ const createPlaceholderSetting = (
   currentSetting?: PlaceholderSetting
 ): PlaceholderSetting => {
   switch (type) {
+    case "multiline":
+      return { type };
     case "list":
       return {
         type,
@@ -1010,6 +1012,22 @@ export default function TemplateEditorPage() {
                                 )
                               )}
                             </select>
+                          ) : placeholderSettings[placeholder]?.type ===
+                            "multiline" ? (
+                            <textarea
+                              className="w-full rounded-lg border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              rows={4}
+                              value={getInputValueForPlaceholder(
+                                activeSceneValues[placeholder],
+                                placeholderSettings[placeholder]
+                              )}
+                              onChange={(e) =>
+                                handlePlaceholderChange(
+                                  placeholder,
+                                  e.target.value
+                                )
+                              }
+                            />
                           ) : (
                             <input
                               type={
